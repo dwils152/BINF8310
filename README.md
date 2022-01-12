@@ -1,3 +1,3 @@
 # BINF8310
-##David Wilson
+## David Wilson
 Repository for Advanced Statistics project and assignments
