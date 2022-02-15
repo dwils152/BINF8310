@@ -1,0 +1,290 @@
+---
+title: "Lab2"
+author: "David Wilson • dwils152@uncc.edu"
+date: "2/3/2022"
+output: html_document
+---
+
+<br> 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+### a) You walk into the “occasionally dishonest casino”  with prior probabilities and likelihoods that a “loaded” die has a 10% chance of getting a 1-5 and a 50% chance of getting a 6 but 99% of the dice are fair)  
+
+<hr>
+
+#### You pick up one die and with it roll: 2 3 2 6 3 5 6 2 6 6 2 6 6 2 3 6 6 6 5 6 6 5 6 6 6 6 6 4 6 3 3 3 6 6 5 6 6
+#### Make a graph of the posterior probability that you have picked up a loaded die as a function of the number of times you have rolled the die.
+
+```{r}
+#Calculating the posterior probabilities from the observed data
+rolls <- c(2,3,2,6,3,5,6,2,6,6,2,6,6,2,3,6,6,6,5,6,6,5,6,6,6,6,6,4,6,3,3,3,6,6,5,6,6)
+
+prob_loaded <- 0.01
+loaded_likelihoods <- c(rep(0.1, 5), 0.5)
+fair_likelihoods <- rep(0.165, 6)
+
+posteriors <- vector(length=length(rolls))
+
+for ( i in 1:length(rolls) ) {
+  
+  posterior <- loaded_likelihoods[rolls[i]] * prob_loaded / 
+    ( (fair_likelihoods[rolls[i]] * (1-prob_loaded)) + ((loaded_likelihoods[rolls[i]]) * prob_loaded) )
+  
+  posteriors[i] <- posterior
+  prob_loaded <- posterior
+  
+}
+#posteriors
+
+```
+
+``` {r}
+#Plotting the probability that the die is loaded
+library(ggplot2)
+df <- data.frame(posteriors, 1:length(posteriors))
+names(df) <- c("posteriors", "roll_num")
+ggplot(df, aes(x=roll_num, y=posteriors)) + geom_point(color='dodgerblue4') + xlab("Roll Number") + ylab("P(Loaded)") + theme(text= element_text(size=20))
+
+```
+
+### b) How many times on average would you need to roll a loaded die to be 99.999%  sure that it was loaded? (Show your work)
+
+```{r}
+
+#The loaded die function from Homework 1
+rollLoadedDie <- function(num_rolls) {
+  
+  posterior <- loaded_likelihoods[rolls[i]] * prob_loaded / 
+    ( (fair_likelihoods[rolls[i]] * (1-prob_loaded)) + ((loaded_likelihoods[rolls[i]]) * prob_loaded) )
+  
+  posteriors[i] <- posterior
+  prob_loaded <- posterior
+  
+  die <- c(1, 2, 3, 4, 5, 6)
+  return(sample(die, size=num_rolls, replace=T, prob=c(0.1, 0.1, 0.1, 0.1, 0.1, 0.5)))
+      
+}
+
+```
+
+```{r}
+
+#Rolling the die until we are pretty sure it's loaded
+run_trial <- function() {
+
+  iters <- 0
+  
+  while ( prob_loaded < thresh ) {
+  
+    roll <- rollLoadedDie(1)
+    posterior <- loaded_likelihoods[roll] * prob_loaded / 
+      ( (fair_likelihoods[roll] * (1-prob_loaded)) + ((loaded_likelihoods[roll]) * prob_loaded) )
+    prob_loaded <- posterior
+    iters <- iters + 1
+    
+  }
+  
+  return(iters)
+  
+}
+
+```
+
+```{r}
+
+#Running several trials and calculating the average number of rolls it takes to be 99.999% sure it's loaded
+
+prob_loaded <- 0.01
+loaded_likelihoods <- c(rep(0.1, 5), 0.5)
+fair_likelihoods <- rep(0.165, 6)
+
+thresh <- 0.99999
+trial_size <- 10000
+iters_list <- vector(length=trial_size)
+
+for ( i in 1:trial_size) {
+  
+  iters_list[i] <- run_trial()
+  
+}
+
+sum(iters_list)/length(iters_list)
+
+```
+
+## Problem 2
+
+### You are consulting for a hospital.  They have a diagnostic test for a disease with a known background prevalence of 0.1%. The test has the following properties:
+> $P(\, positive\, result\, | \,person\, has\, disease) = 0.91$ <br>
+<br>
+> $P(\, negative\, result\, | \,person\, does\, not\, have\, disease) = 0.84$
+
+> The cost of running the test one time is $1.  The test can be repeated for each patient and the results of the test are independent of one another allowing for Bayesian updates.  The test always yields a positive or negative result.
+
+>  The requirement of the hospital is that the test is repeated for each patient until a Bayesian posterior of at least 0.99999 is reached.
+
+<hr>
+
+### The patient has the disease but we don't know that. what distribution do we create data from?
+
+To generate the test data we can use the Uniform Distribution. Given the nature of our test, we know that for a patient with the disease, P(+|D) = 0.91 and P(-|D) = 0.09. If our randomly generated number is less than or equal to 0.91 we will consider it a positive test result, otherwise we will consider it a negative test result. The same concept can be applied for healthy patients... P(-|H) = 0.84 and P(+|H) = 0.16
+
+### (a) Run simulations for a patient with the disease.  About how many times on average must the test be repeated to achieve the hospital’s requirements?*
+
+```{r}
+
+#This function generates test data for a diseased individual
+get_test_data <- function(num_tests, healthy) {
+  
+  tests <- vector(length=num_tests)
+  
+  for (i in 1:num_tests ) {
+  
+    if ( healthy == FALSE) {
+      test <- ifelse( runif(1) <= 0.91, "Pos", "Neg")
+    } else {
+      test <- ifelse( runif(1) <= 0.16, "Pos", "Neg")
+    }
+  
+    tests[i] <- test
+    
+  }
+  
+  return(tests)
+  
+}
+
+```
+
+```{r}
+
+#Test a single patient until we are 99.999% sure that they are either positive or negative
+test_single_patient <- function(healthy_patient) {
+  
+  pos_given_d <- 0.91
+  neg_given_h <- 0.84
+  prob_diseased <- 0.001
+  prob_healthy <- 0.999
+  
+  posts <- vector()
+  iters <- 0
+  
+  if ( healthy_patient == FALSE ) {
+  
+    while (prob_diseased <= 0.99999 ) {
+      
+      test <- get_test_data(1, healthy_patient)
+
+      if ( test == "Pos" ) {
+        post <- (pos_given_d * prob_diseased) / 
+          ((pos_given_d * prob_diseased) + ((1-neg_given_h) * (1-prob_diseased)))
+      }
+      if ( test == "Neg" ) {
+        post <- ((1-pos_given_d) * prob_diseased) / 
+          (((1-pos_given_d) * prob_diseased) + (neg_given_h * (1-prob_diseased)))
+      }
+      prob_diseased <- post
+      posts[iters+1] <- post
+      iters <- iters + 1
+    }  
+    
+  } else {
+      
+      while (prob_healthy <= 0.99999 ) {
+      
+        test <- get_test_data(1, healthy_patient)
+
+        if ( test == "Pos" ) {
+          post <- ((1-neg_given_h) * prob_healthy) / 
+            (((1-neg_given_h) * prob_healthy) + (pos_given_d * (1-prob_healthy)))
+        }
+        if ( test == "Neg" ) {
+          post <- (neg_given_h * prob_healthy) / 
+            ((neg_given_h * prob_healthy) + ((1-pos_given_d) * (1-prob_healthy)))
+        }
+        prob_healthy <- post
+        posts[iters+1] <- post
+        iters <- iters + 1
+      }
+  }
+  return(posts) 
+}
+  
+
+```
+
+```{r}
+#Test many patients and average the results
+num_trials <- 100000
+iters_list = vector(length=num_trials)
+
+for (i in 1:num_trials) {
+  
+  iters_list[i] <- length(test_single_patient(healthy=FALSE))
+  
+}
+
+sum(iters_list)/length(iters_list)
+
+```
+
+
+#### (b) *Repeat the simulations for a patient without the disease.  About how many times on average must the test be repeated to achieve the hospital’s requirements?*
+
+```{r}
+
+#This function generates test data for sick or healthy individuals
+iters_list = vector(length=num_trials)
+
+for (i in 1:num_trials) {
+  
+  iters_list[i] <- length(test_single_patient(healthy=TRUE))
+  
+}
+
+sum(iters_list)/length(iters_list)
+
+```
+
+
+#### (c) *The hospital plans to run the test on one million patients per year.  At a cost of $1 per test, about how much should the hospital budget to run these tests?  (That is to say, for a million patients, how many tests can the hospital anticipate running?)*
+
+```{r}
+
+#drawing patients from the population based on the background rate
+draw_pat <- function(num_pats) {
+
+  pats <- runif(num_pats)
+  
+  pats <- pats <= 0.999 
+  
+  return(pats)
+  
+}
+
+```
+
+```{r}
+
+#Calculating the expense for 1 million patients
+patients <- draw_pat(1000000)
+
+total_expense <- 0
+
+for ( i in 1:length(patients) ) {
+  
+  total_expense <- total_expense + length(test_single_patient(patients[i]))
+}
+
+total_expense
+
+
+
+```
+
+
+

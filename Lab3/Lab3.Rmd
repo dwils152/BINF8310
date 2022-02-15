@@ -1,0 +1,81 @@
+---
+title: "Lab3"
+author: "David Wilson • dwils152@uncc.edu"
+date: "2/10/2022"
+output: html_document
+---
+
+(1A)  Plot the prior graph for a situation for a coin where the prior belief for p(head) is represented by the following R code : dexp(x, rate =5) / 0.9932621
+
+for values of 0 <= x <= 1 and 0 otherwise.  (We choose the denominator to make the 
+Integral between 0 and 1 sum to 1).
+
+```{r}
+
+prob <- seq(0, 1, by=0.0001)
+
+freq <- dexp(prob, rate=5) / 0.9932621
+		
+plot(prob, freq)
+
+```
+
+(1B)  Calculate the posterior graph with both the Metropolis algorithm and grid approximation for a case with 14 heads and 10 tails (where x = prob(head)) .
+Show the two methods roughly agree.  Compare these to a plot with a posterior for 
+new data of 14 heads and 10 tails with a prior with beta(40,40).
+
+
+```{r}
+#posterior for old prior beta 40, 40
+plot(prob, dbeta(prob, 55, 51))
+```
+
+```{r}
+
+piOld <- 0.5
+posteriorDist <- vector(length=50000)
+
+for (i in 1: 50000) {
+  
+  pOld <- (dexp(piOld, rate=5) / 0.9932621) * dbinom(14, 24, piOld)
+  
+  piNew <- piOld + rnorm(1, 0, sd=0.01)
+  
+  if ( piNew > 1)
+    piNew = 1;
+  
+  if ( piNew < 0 )
+    piNew = 0;
+  
+  pNew <- (dexp(piNew, rate=5) / 0.9932621) * dbinom(14, 24, piNew)
+  
+  ratio <- pNew / pOld
+  
+  if (ratio > 1 || ratio >= runif(1) )
+    piOld = piNew;
+  
+  posteriorDist[i] = piOld
+  
+  if ( i %% 1000 == 0 ) {
+    myHist <- hist(posteriorDist, breaks=200, plot=FALSE)
+    plot(myHist$mids, myHist$counts/i, main = paste("iteration", i))
+  }
+    
+  
+}
+
+```
+
+```{r}
+
+```
+
+
+
+(So for the observation of 14 heads and 10 tails you will end up with a graph with three plots superimposed: (i) the Metropolis algorithm with an exp prior, (ii) grid approximation with an exp prior and (iii) exact analytical solution from a beta(40,40) prior
+ make the plots different colors so you can visualize them…)
+
+(1C)  Repeat the above calculation but for a case of 583 heads and 417 tails. 
+(You may need to adjust your model step parameters to try and get the grid and Metropolis graphs to match up).  How do the three posterior curves relate to each other now?  Why does this plot look different than the plot in (1B)?
+
+Send graphs and code in your e-mail.     (See next slide for hints!)
