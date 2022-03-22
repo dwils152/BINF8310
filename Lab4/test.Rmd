@@ -1,0 +1,173 @@
+---
+title: "Lab 4"
+author: "David Wilson"
+date: "2/23/2022"
+output: html_document
+---
+
+### (1) Read the dataset into R:
+
+##### Each row in the spreadsheet represents a different gene in an RNA-seq experiment. The samples are E. Coli derived from two different mice under identical conditions (i.e. biological replicates).
+
+```{r}
+data <- read.table("./longitdunalRNASeqData/nc101_scaff_dataCounts.txt",header=TRUE,row.names=1)
+```
+
+### (2) On a log10-log10 scale, show a plot of the counts for the two samples “D2_01” and “D2_02”.
+
+```{r}
+
+library(ggplot2)
+to_plot <- data.frame(log10(data$D2_01), log10(data$D2_02))
+names(to_plot) <- c("D1", "D2")
+ggplot(to_plot, aes(x=D1, y=D2)) + geom_point(alpha=0.4) + xlab("Log10(Replicate 1)") + ylab("Log10(Replicate 2)") + theme(text= element_text(size=14), axis.title.x=element_text(face="bold"),  axis.title.y=element_text(face="bold"))
+
+```
+
+### Qualitatively, do the biological replicates appear to have similar patterns of gene expression?
+
+Yes they do. There is a linear trend in log10 expression of the replicates
+
+### (3) On a log10-log10 scale, plot the variance of all genes (across all samples) vs. the mean (across all genes) with a red line on your graph representing the identity line.  Does the mean equal the variance for these samples?
+
+```{r}
+
+log_vars <- log10(apply(data, 1, var))
+log_means <- log10(apply(data, 1, mean))
+mean_var_plot <- data.frame(log_vars, log_means)
+names(mean_var_plot) <- c('v', 'm')
+ggplot(mean_var_plot, aes(x=m, y=v)) + geom_point(alpha=0.4) + geom_abline(intercept=0, slope=1, color='red', linetype="dotted") + xlab("Log10(Sample's Mean)") + ylab("Log10(Gene's Variance)") + theme(text= element_text(size=14), axis.title.x=element_text(face="bold"),  axis.title.y=element_text(face="bold"))
+
+```
+
+### (4) Consider the first gene in the spreadsheet (e.g. NC101_00003).  Make a two by two contingency table:
+> - Sequences in D2_01	Sequences in D2_02
+> - Assigned to NC101_00003		
+> - Not assigned to NC101_00003	
+
+```{r}
+
+in_D2_01 <- c(data[1,1], sum(data[2:nrow(data),1]))
+in_D2_02 <- c(data[1,2], sum(data[2:nrow(data),2]))
+fish_tab <- data.frame(in_D2_01, in_D2_02)
+
+```
+
+
+### Use the two sided fisher.test to generate a p-value for the null hypothesis that the columns and rows of the contingency table are independent.
+
+```{r}
+
+fisher.test(fish_tab, alternative="two.sided")
+
+```
+
+
+### (5) Now generate a p-value for all the genes in the spreadsheet from the Fisher test.  Plot out those p-values in a histogram.  
+
+```{r}
+
+p_vals = vector(length=nrow(data))
+
+for ( i in 1:nrow(data) ) {
+ 
+  in_D2_01 <- c(data[i,1], sum(data[,1]) - data[i,1])
+  in_D2_02 <- c(data[i,2], sum(data[,2]) - data[i,2])
+  fish_tab <- data.frame(in_D2_01, in_D2_02)
+  p_vals[i] <- fisher.test(fish_tab, alternative="two.sided")$p.value
+  
+}
+
+plot_p_vals <- data.frame(p_vals)
+ggplot(plot_p_vals, aes(x=p_vals)) + geom_histogram(fill="grey", color="black") + xlab("P-values") + ylab("Count") + theme(text= element_text(size=14), axis.title.x=element_text(face="bold"),  axis.title.y=element_text(face="bold"))
+
+
+```
+
+### Are they uniformly distributed?  Would you expect them to be?  Are the p-values more significant, less significant or what we would expect under a uniform distribution?  
+
+The P-values (very) roughly form a U shaped distribution, where there is an abundance of genes that are statistically significant and an abundance of genes with almost no change in the number of mapped reads. If the samples are replicates, we would expect similar gene expression and a uniform distribution of p-values. 
+
+### How does the p-value distribution change if you remove low abundance genes?
+
+```{r}
+
+filt_data <- data[(data$D2_01 + data$D2_02 > 50), ]
+
+p_vals_2 = vector(length=nrow(filt_data))
+
+for ( i in 1:nrow(filt_data) ) {
+ 
+  in_D2_01 <- c(filt_data[i,1], sum(filt_data[,1]) - filt_data[i,1])
+  in_D2_02 <- c(filt_data[i,2], sum(filt_data[,2]) - filt_data[i,2])
+  fish_tab <- data.frame(in_D2_01, in_D2_02)
+  p_vals_2[i] <- fisher.test(fish_tab, alternative="two.sided")$p.value
+  
+}
+
+plot_p_vals_2 <- data.frame(p_vals_2)
+ggplot(plot_p_vals_2, aes(x=p_vals_2)) + geom_histogram(fill="grey", color="black") + xlab("P-values (low expression removed)") + ylab("Count") + theme(text= element_text(size=14), axis.title.x=element_text(face="bold"),  axis.title.y=element_text(face="bold"))
+
+```
+
+After removing the lowly expressed genes, the number of p-values that equal 1 is significantly reduced.
+
+### (6) Add 1 to every value in the table ( with something like myT = myT + 1 ).  This is called adding a pseudo-count.  Now consider the first gene (NC101_00003 ) again.  From the first experiment, calculate 
+	
+expected frequency = p = 
+		(# Assigned to NC101_00003 in D2_01)/total # of sequences in D2_01)
+		
+```{r}
+
+data <- data + 1
+p <- data[1,1] / sum(data[, 1])
+
+# or for the filtered data
+#filt_data[1,1] / sum(filt_data[2:nrow(filt_data), 1])
+
+
+```
+
+
+Now use poisson.test to assign a p-value for the null hypothesis that the value of p derived from D2_01 could have produced the number of reads observed for this gene in D2_02.
+
+```{r}
+
+poisson.test(data[1,2], sum(data[, 2] ,r=p))
+
+```
+
+### (7) Repeat the calculation in (6) for every gene in the spreadsheet.  Graph these p-values against the p-values produced in (5) on a log10-log10 plot.  How well do they agree? 
+
+(Note: since the mean does not equal the variance, the models make assumptions that are not supported by the data!  Also, with n=1 in both conditions, our sample size is small and we would want to be very careful about putting too much weight in any conclusions we draw from such a small sample size...)
+
+```{r}
+
+p_vals_3 <- vector(length=nrow(data))
+
+for ( i in 1:nrow(data) ) {
+  
+  p <- data[i,1] / sum(data[,1])
+  p_vals_3[i] <- poisson.test(data[i,2], sum(data[, 2]),r=p)$p.value
+  
+}
+
+plot_p_vals_3 <- data.frame(p_vals_3)
+
+ggplot(plot_p_vals_3, aes(x=p_vals)) + geom_histogram(fill="grey", color="black") + xlab("P-value Poisson") + ylab("Count") + theme(text= element_text(size=14), axis.title.x=element_text(face="bold"),  axis.title.y=element_text(face="bold"))
+
+```
+
+```{r}
+
+plot_p_vals_4 <- data.frame(log10(p_vals_3), log10(p_vals))
+
+ggplot(data=plot_p_vals_4, aes(x=p_vals, y=p_vals_3)) + geom_point(alpha=0.4) + xlab("Log10(Poisson P-values)") + ylab("Log10(P-values)") + theme(text= element_text(size=14), axis.title.x=element_text(face="bold"),  axis.title.y=element_text(face="bold"))
+
+```
+
+They agree fairly well. There is a linear relation between the two. 
+
+
+
+
