@@ -1,0 +1,123 @@
+---
+title: "Microbiome Original"
+output: html_notebook
+---
+
+```{r}
+#Load in Data with normalized abundances
+
+library(dplyr)
+
+
+setwd("/Users/dwils152/Google Drive/My Drive/spring2022/adv_stats/project/data/UrbanRuralChina/16SrRNA/inputData/RDP")
+phylum <- read.table('phylum_taxaAsColumnsLogNorm_WithMetadata.txt', header=T, sep='\t')
+class <- read.table('class_taxaAsColumnsLogNorm_WithMetadata.txt', header=T, sep='\t')
+order <- read.table('order_taxaAsColumnsLogNorm_WithMetadata.txt', header=T, sep='\t')
+family <- read.table('family_taxaAsColumnsLogNorm_WithMetadata.txt', header=T, sep='\t')
+genus <- read.table('genus_taxaAsColumnsLogNorm_WithMetadata.txt', header=T, sep='\t')
+otu <- read.table('./../abundantOTU/abundantOTUForwardTaxaAsColumnsLogNormalWithMetadata.txt', header=T, sep='\t')
+
+
+```
+
+```{r}
+
+#-----plotting MDS -------
+
+library(vegan)
+library(ggplot2)
+
+#subset the dataframes to grab just the species
+phylum_spec <- phylum[,6:ncol(phylum)]
+class_spec <- class[,6:ncol(class)]
+order_spec <- order[,6:ncol(order)]
+family_spec <- family[,6:ncol(family)]
+genus_spec <- genus[,6:ncol(genus)]
+otu_spec <- otu[,6:ncol(otu)]
+
+#calculate curtis-bray distance using vegan library
+phy_dist <- vegdist(phylum_spec, method='bray')
+class_dist <- vegdist(class_spec, method='bray')
+ord_dist <- vegdist(order_spec, method='bray')
+fam_dist <- vegdist(family_spec, method='bray')
+gen_dist <- vegdist(genus_spec, method='bray')
+otu_dist <- vegdist(otu_spec, method='bray')
+
+#perform multidimensional scaling
+phy_fit <- cmdscale(phy_dist, eig=TRUE, k=2)
+class_fit <- cmdscale(class_dist, eig=TRUE, k=2)
+ord_fit <- cmdscale(ord_dist, eig=TRUE, k=2)
+fam_fit <- cmdscale(fam_dist, eig=TRUE, k=2)
+gen_fit <- cmdscale(gen_dist, eig=TRUE, k=2)
+otu_fit <- cmdscale(otu_dist, eig=TRUE, k=2)
+
+#grab the coordinates and eigenvalues
+phy_x <- phy_fit$points[,1]
+phy_y <- phy_fit$points[,2]
+phy_eigs <- phy_fit$eig
+
+class_x <- class_fit$points[,1]
+class_y <- class_fit$points[,2]
+class_eigs <- class_fit$eig
+
+ord_x <- ord_fit$points[,1]
+ord_y <- ord_fit$points[,2]
+ord_eigs <- ord_fit$eig
+
+fam_x <- fam_fit$points[,1]
+fam_y <- fam_fit$points[,2]
+fam_eigs <- fam_fit$eig
+
+gen_x <- gen_fit$points[,1]
+gen_y <- gen_fit$points[,2]
+gen_eigs <- gen_fit$eig
+
+otu_x <- otu_fit$points[,1]
+otu_y <- otu_fit$points[,2]
+otu_eigs <- otu_fit$eig
+
+#incorporate metadata into dataframe and merge reads
+phy_plot <- data.frame(phylum$sampleID, phylum$ruralUrban, phylum$timepoint, phy_x, phy_y, phy_eigs)
+names(phy_plot) <- c("ID", "location", "time", "x", "y", "eigs")
+phy_plot$ID <- gsub("_[1-2]", "", phy_plot$ID)
+phy_plot <- phy_plot %>% group_by(ID, location, time) %>% summarise_all(mean)
+
+class_plot <- data.frame(class$sampleID, class$ruralUrban, class$timepoint, class_x, class_y)
+names(class_plot) <- c("ID", "location", "time", "x", "y")
+class_plot$ID <- gsub("_[1-2]", "", class_plot$ID)
+class_plot <- class_plot %>% group_by(ID, location, time) %>% summarise_all(mean)
+
+ord_plot <- data.frame(order$sampleID, order$ruralUrban, order$timepoint, ord_x, ord_y)
+names(ord_plot) <- c("ID", "location", "time", "x", "y")
+ord_plot$ID <- gsub("_[1-2]", "", ord_plot$ID)
+ord_plot <- ord_plot %>% group_by(ID, location, time) %>% summarise_all(mean)
+                                                                        
+fam_plot <- data.frame(family$sampleID, family$ruralUrban, family$timepoint, fam_x, fam_y)
+names(fam_plot) <- c("ID", "location", "time", "x", "y")
+fam_plot$ID <- gsub("_[1-2]", "", fam_plot$ID)
+fam_plot <- fam_plot %>% group_by(ID, location, time) %>% summarise_all(mean)
+                                                                        
+gen_plot <- data.frame(genus$sampleID, genus$ruralUrban, genus$timepoint, gen_x, gen_y)
+names(gen_plot) <- c("ID", "location", "time", "x", "y")
+gen_plot$ID <- gsub("_[1-2]", "", gen_plot$ID)
+gen_plot <- gen_plot %>% group_by(ID, location, time) %>% summarise_all(mean)
+                                                                        
+otu_plot <- data.frame(otu$sampleID, otu$ruralUrban, otu$timepoint, otu_x, otu_y)
+names(otu_plot) <- c("ID", "location", "time", "x", "y")
+otu_plot$ID <- gsub("_[1-2]", "", otu_plot$ID)
+otu_plot <- otu_plot %>% group_by(ID, location, time) %>% summarise_all(mean)                                                                       
+                        
+#plot :)                                                
+ggplot(phy_plot, aes(x=x, y=y)) + geom_point(aes(color=location, shape=time, size=0.2)) + scale_color_hue(direction = -1)
+ggplot(class_plot, aes(x=x, y=y)) + geom_point(aes(color=location, shape=time, size=0.2)) + scale_color_hue(direction = -1)
+ggplot(ord_plot, aes(x=x, y=y)) + geom_point(aes(color=location, shape=time, size=0.2)) + scale_color_hue(direction = -1)
+ggplot(fam_plot, aes(x=x, y=y)) + geom_point(aes(color=location, shape=time, size=0.2)) + scale_color_hue(direction = -1)
+ggplot(gen_plot, aes(x=x, y=y)) + geom_point(aes(color=location, shape=time, size=0.2)) + scale_color_hue(direction = -1)
+ggplot(otu_plot, aes(x=x, y=y)) + geom_point(aes(color=location, shape=time, size=0.2)) + scale_color_hue(direction = -1)
+
+
+
+
+
+```
+

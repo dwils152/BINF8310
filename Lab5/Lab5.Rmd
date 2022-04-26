@@ -14,7 +14,17 @@ output: html_document
 
 ```{r}
 
-#cancer_risk <- read.table('cancerRisk.txt')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+
+cancer_risk <- read.table('cancerRisk.txt', header=TRUE, sep='\t')
+
+plot <- ggplot(cancer_risk, aes(x=log10(CumulativeCellDivisions), y=log10(Lifetime_cancer_risk))) + 
+         geom_point() + theme(text=element_text(size=14), axis.title.x=element_text(face="bold"), axis.title.y=element_text(face="bold")) + 
+         xlab("Log10(Cumulative Cell Divisions)") + ylab("Log10(Lifetime Cancer Risk)") #+ geom_label_repel(aes(label=Cancer_type), size=1.5)
+
+plot
 
 ```
 
@@ -22,24 +32,89 @@ output: html_document
 
 ```{r}
 
+risk <- log10(cancer_risk$Lifetime_cancer_risk)
+cell_div <- log10(cancer_risk$CumulativeCellDivisions)
+
+myLm <- lm(risk ~ cell_div)
+slope <- myLm$coefficients[[2]]
+intercept <- myLm$coefficients[[1]]
+
+plot + geom_abline(slope=slope, intercept=intercept)
+
+
 ```
 
 ##### c) What is the p-value for the null hypothesis that the slope of the regression between these two variables is zero?  What is the r-squared value of the model?
 
 ```{r}
 
+summary(myLm)
+
 ```
+
+p-value: 2.03e-11
+Adjusted R-squared: 0.6341
+
 
 ##### d): Are the assumptions of constant variance and normal distribution of the residues reasonable for this model?  Justify your answer.
 
+Since we don't have multiple sample's for each x-value, the best we can do is plot the residuals. Visual assessment of the Q-Q plot for residuals shows that they are normally distributed. To assess variance we can plot the residuals vs. our linear model. This plot shows that there are a few outliers (points, 17, 27, and 28) but the variance is rougly equal
+
+
 ```{r}
+
+plot(myLm)
+
+```
+#### 2) Consider the case-control file for the colorectal adenomas data set that is here: http://afodor.github.io/classes/stats2015/caseControlData.txt. A separate file gives obesity (BMI) data for these same subjects:http://afodor.github.io/classes/stats2015/BMI_Data.txt. 
+
+##### a) For each OTU in the spreadsheet, generate a p-value from linear regression comparing BMI to the relative abundance of each OTU.    Graph out all the p-values. 
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+
+bmi <- read.table('BMI_data.txt', header=TRUE, sep='\t')
+case_control <- read.table('caseControlData.txt', header=TRUE, sep='\t')
+
+#split the case_control sample_id so it can be merged with bmi
+cases <- separate(case_control, col=sample, into=c('sample_id', 'case_id'), sep='_', extra='merge')
+
+#there are 71 unique samples in the cases tables and 165 unique samples in the bmi table
+#this means we'll have some missing data when we merge the tables
+merged <- merge(cases, bmi, by.x='sample_id', by.y='studyid')
+
+#dropping unnecessary cols, moving bmi into 1st column, and drop columns that contain NA
+merged$sample_id <- NULL 
+merged$case_id <- NULL
+merged <- merged %>% relocate(bmi)
+merged <- merged %>% drop_na()
+```
+
+```{r}
+
+p_vals <- vector(length=(ncol(merged)-1))
+
+for ( i in 2:ncol(merged) ) {
+  
+  model <- lm(data=merged, bmi ~ merged[,i])
+  p_vals[i-1] <- anova(model)$"Pr(>F)"[1]
+  
+}
+
+hist(p_vals, breaks = 15, xlab='P-value')
+```
+
+##### Do they appear uniformly distributed? Does the microbial community appear to be influencing body weight in this cohort?  Are any of these associations significant at a 10% false discovery rate? Hints:  To lookup the ids in the BMI table, you will need to some processing on the “sample” column in the caseControl file.  The following code will convert the a sampleID so that it will match the BMI file.# remove case and control key <- sub("case", "", sampleID) key <- sub("control", "", key) # remove extraneous information from the suffix key <- strsplit( key, "_")[[1]][1]
+
+```{r}
+
+adj_p_vals <- p.adjust(p_vals, method="BH")
+adj_p_vals_fdr10 <- adj_p_vals[adj_p_vals <= 0.10]
 
 ```
 
-***
 
-#### 2) Consider the case-control file for the colorectal adenomas data set that is here: http://afodor.github.io/classes/stats2015/caseControlData.txt. A separate file gives obesity (BMI) data for these same subjects:http://afodor.github.io/classes/stats2015/BMI_Data.txt. For each OTU in the spreadsheet, generate a p-value from linear regression comparing BMI to the relative abundance of each OTU.    Graph out all the p-values.  Do they appear uniformly distributed? Does the microbial community appear to be influencing body weight in this cohort?  Are any of these associations significant at a 10% false discovery rate? Hints:  To lookup the ids in the BMI table, you will need to some processing on the “sample” column in the caseControl file.  The following code will convert the a sampleID so that it will match the BMI file.# remove case and control key <- sub("case", "", sampleID) key <- sub("control", "", key) # remove extraneous information from the suffix key <- strsplit( key, "_")[[1]][1]
+Yes, the data appear uniformly distributed. It appears that none the the OTUs have a significant influence on BMI at a 10% FDR
 
-Also, to get the p-value out of the linear model try:
-	anova( myLm)$"Pr(>F)"[1]
-We’ll see why that work shortly in future lectures.
