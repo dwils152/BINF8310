@@ -9,22 +9,200 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+#### We again return to our RNA seq dataset of E. Coli genes from mice. The URL is here: <http://afodor.github.io/classes/stats2015/longitdunalRNASeqData.zip> As before, read and normalize the counts table ( "nc101_scaff_dataCounts.txt " into R).
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+###### (The first 3 columns are "day 2", the next 3 columns are "week 12" and the last 5 are "week 18" (even though they say w20)).
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+setwd('/Users/dwils152/Google Drive/My Drive/spring2022/adv_stats/BINF8310/Lab6')
+data <- read.table("nc101_scaff_dataCounts.txt",sep="\t",header=TRUE,row.names=1)
+data <- data[apply(data, 1, median)> 5,] #filter out rare genes
+norm <- data
 
-```{r cars}
-summary(cars)
+for ( i in 1:ncol(data) ) {
+	col_sum = sum(data[,i])
+	norm[,i] = norm[,i]/col_sum
+}
+
 ```
 
-## Including Plots
+##### A) For each row in the spreadsheet, perform a one-way ANOVA with categories "day 2", "week 12" and "week 18". Plot out the histogram of all p-values. How many genes are significant at a BH FDR-corrected 0.05 threshold.
 
-You can also embed plots, for example:
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(tibble)
+library(ggpubr)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#normalized data
+norm_data <- as.data.frame(norm)
+
+#rename, and create factors
+names(norm_data) <- sub("_..", "", names(norm_data))
+time_points <- c(rep("D2", 3), rep("W12", 3), rep("w20", 5))
+time_points <- factor(time_points)
+
+p_values_A <- vector(length=nrow(norm_data))
+
+#get p-values for each gene
+for (gene in 1:nrow(norm_data)) {
+  gene_exp <- unlist(norm_data[gene,]) #make list into numeric vector for use in lm
+  model <- lm(gene_exp ~ time_points)
+  anova <- anova(model)
+  p_values_A[gene] <- anova$"Pr(>F)"[1]
+}
+
+#calculate p-values
+adj_p_values_A <- p.adjust(p_values_A, method='BH')
+sig_p_values <- adj_p_values_A[adj_p_values_A <= 0.05]
+
+paste("There are", length(sig_p_values), "significantly expressed genes at 5% FDR.")
+
+#plot adjusted and unadjusted p-values
+pvals_df <- data.frame(p_values_A, adj_p_values_A)
+gghistogram(pvals_df,
+       x = c("p_values_A", "adj_p_values_A"),
+       y = "..count..",
+       combine = TRUE,
+       xlab = "P-Values",
+       ylab = "Count",
+       palette = "jco",
+)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+##### B) Next make an ANOVA as a linear regression as a function of time (so 2 days, 86 days and 128 days). Plot out the histogram of all p-values. How many genes are significant at a BH FDR-corrected 0.05 threshold.
+
+```{r}
+
+#vector of p-values for our new model
+p_values_B <- vector(length=nrow(norm_data))
+time_points <- as.numeric(c(rep(2, 3), rep(86, 3), rep(128, 5)))
+
+#get p-values for each gene
+for (gene in 1:nrow(norm_data)) {
+  
+  gene_exp <- as.numeric(unlist(data[gene,])) #make list into numeric vector for use in lm
+  model <- lm(gene_exp ~ time_points)
+  anova <- anova(model)
+  p_values_B[gene] <- anova$"Pr(>F)"[1]
+  #two_param_model[gene] <- model
+  
+}
+
+#plot adjusted p-values
+adj_p_values_B <- p.adjust(p_values_B, method='BH')
+sig_p_values <- adj_p_values_B[adj_p_values_B <= 0.05]
+
+paste("There are", length(sig_p_values), "significantly expressed genes at 5% FDR.")
+
+#plot adjusted and unadjusted p-values
+pvals_df <- data.frame(p_values_B, adj_p_values_B)
+gghistogram(pvals_df,
+       x = c("p_values_B", "adj_p_values_B"),
+       y = "..count..",
+       combine = TRUE,
+       xlab = "P-Values",
+       ylab = "Count",
+       palette = "jco"
+)
+
+
+```
+
+##### C) Finally, for each row in the spreadsheet perform an ANVOA comparing the three-parameter model from (A) and the two parameter model from (B). Plot out the histogram of all p-values. For how many genes is there a significant difference between these two models at a BH FDR-corrected threshold.
+
+```{r}
+
+f.stat <- vector(length=nrow(norm_data))
+p_values_C <- vector(length=nrow(norm_data))
+aic2p <- vector(length=nrow(norm_data))
+aic3p <- vector(length=nrow(norm_data))
+
+
+three_param <- c(rep("D2", 3), rep("W12", 3), rep("w20", 5))
+two_param <- c(rep(2, 3), rep(86, 3), rep(128, 5))
+
+#compare the two and three parameter models
+for (gene in 1:nrow(norm_data)) {
+  
+  gene_exp <- as.numeric(unlist(data[gene,])) #make list into numeric vector for use in lm
+  
+  model_3p <- lm(gene_exp ~ three_param)
+  anova_3p <- anova(model_3p)
+  
+  model_2p <- lm(gene_exp ~ two_param)
+  anova_2p <- anova(model_2p)
+  
+  err_3p <- sum(residuals(model_3p)^2)
+  df_3p <- anova_3p$Df[2]
+  
+  err_2p <- sum(residuals(model_2p)^2)
+  df_2p <- anova_2p$Df[2]
+  
+  num <- (err_2p - err_3p) / (df_2p - df_3p )
+  denom <- (err_3p / df_3p )
+  
+  f <- (num/denom)
+  p_values_C[gene] <- pf(f, 1, 8, lower.tail = F)
+  
+   aic2p[gene] <- AIC(model_3p, model_2p)$AIC[2]
+   aic3p[gene] <- AIC(model_3p, model_2p)$AIC[1]
+}
+
+adj_p_values_C <- p.adjust(p_values_C, method='BH')
+sig_p_values <- adj_p_values_C[adj_p_values_C <= 0.05]
+
+pvals_df <- data.frame(p_values_C, adj_p_values_C)
+gghistogram(pvals_df,
+       x = c("p_values_C", "adj_p_values_C"),
+       y = "..count..",
+       combine = TRUE,
+       xlab = "P-Values",
+       ylab = "Count",
+       palette = "jco"
+)
+
+```
+
+##### D) Make three graphs showing the relative abundance of the most significant gene under each of the three ANOVA models. For (A) and (C), the x-axis will the category (day 3, week 12 and week 18) and the y-axis will be the relative abundance. Be sure to properly label and title all graphs and axes. For (B) the x-axis will be time (in days) and the y-axis will be the relative abundance. For the graph of the top hit from (B), include the regression line for the plot from (B).
+
+```{r}
+low_a <- which.min(adj_p_values_A)
+low_b <- which.min(adj_p_values_B)
+low_c <- which.min(adj_p_values_C)
+
+a <- as.data.frame(norm_data[low_a,])
+b <- as.data.frame(norm_data[low_b,])
+c <- as.data.frame(norm_data[low_c,])
+
+a <- as.data.frame(t(a))
+b <- as.data.frame(t(b))
+c <- as.data.frame(t(c))
+
+a <- tibble::rownames_to_column(a, "time")
+b <- tibble::rownames_to_column(b, "time")
+c <- tibble::rownames_to_column(c, "time")
+
+a$time <- c(rep("D2", 3), rep("W12", 3), rep("w20", 5))
+b$time <- c(rep("D2", 3), rep("W12", 3), rep("w20", 5))
+c$time <- c(rep("D2", 3), rep("W12", 3), rep("w20", 5))
+
+p1 <- ggplot(a, aes(x=time, y=NC101_03447)) + geom_boxplot()
+p2 <- ggplot(b, aes(x=time, y=NC101_00004)) + geom_boxplot()
+p3 <- ggplot(c, aes(x=time, y=NC101_04587)) + geom_boxplot()
+
+ggarrange(p1, p2, p3, nrow=1)
+
+```
+
+##### E) Overall, do you think the three parameter model in (A) or the two-parameter model in (B) is more appropriate for these data? Justify your answer.
+
+The average AIC from the two models is nearly identical with the 2p model slightly edging out the 3p model. However, I have a feeling that my 2p model is incorrect.
+
+```{r}
+mean(aic2p)
+mean(aic3p)
+```
