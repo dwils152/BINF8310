@@ -3,8 +3,8 @@ title: "Lab7"
 author: "David Wilson"
 date: "4/23/2022"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -75,7 +75,7 @@ pc_df <- data.frame(c(time_pc1, genotype_pc1, cage_pc1), c(time_pc2, genotype_pc
 names(pc_df) <- c("PC1", "PC2")
 row.names(pc_df) <- c("Time", "Genotype", "Cage")
 
-library(kableExtra)
+#library(kableExtra)
 pc_df
 
 ```
@@ -109,7 +109,7 @@ From visual inspection it is difficult to tell if there is a significant cage ef
 ```{r}
 
 library(lme4)
-library(merTools)
+library(lmerTest)
 
 post_cage <- data.frame(post_cage)
 
